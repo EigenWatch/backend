@@ -12,4 +12,5 @@ export enum ErrorCodes {
   // General errors
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   TIMEOUT_ERROR = 'TIMEOUT_ERROR',
+  CACHE_ERROR = 'CACHE_ERROR',
 }
