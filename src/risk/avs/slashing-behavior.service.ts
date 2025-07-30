@@ -1,13 +1,12 @@
-import { Injectable, LoggerService } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { DataService } from 'src/common/data/data.service';
 import { RiskResult } from 'src/common/interfaces/risk.interfaces';
-import { MathUtilsService } from 'src/common/utils/math-utils.service';
+import { LoggerService } from 'src/common/logger.service';
 
 @Injectable()
 export class AVSSlashingBehaviorService {
   constructor(
     private readonly dataService: DataService,
-    private readonly mathUtils: MathUtilsService,
     private readonly logger: LoggerService,
   ) {}
 

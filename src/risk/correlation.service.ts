@@ -1,5 +1,6 @@
-import { Injectable, LoggerService } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { DataService } from 'src/common/data/data.service';
+import { LoggerService } from 'src/common/logger.service';
 
 //   TODO: Review this again
 @Injectable()
