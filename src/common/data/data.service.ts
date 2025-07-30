@@ -6,6 +6,7 @@ import {
   OperatorCommissionEvent,
   OperatorSetMembership,
   DelegationStabilityData,
+  RewardsSubmission,
 } from '../interfaces/risk.interfaces';
 
 @Injectable()
@@ -51,6 +52,10 @@ export class DataService {
       );
     }
   }
+
+  // ========================================
+  // EXISTING METHODS (keeping as-is)
+  // ========================================
 
   async getOperatorSlashingEvents(operatorAddress: string): Promise<any[]> {
     const query = `
@@ -330,5 +335,96 @@ export class DataService {
           : 0,
       monthlyChanges: monthlyValues,
     };
+  }
+
+  // Get AVS rewards submissions for economic sustainability analysis
+  async getAVSRewardsSubmissions(
+    avsAddress: string,
+  ): Promise<RewardsSubmission[]> {
+    const query = `
+      query GetAVSRewardsSubmissions($avsAddress: Bytes!) {
+        rewardsSubmissions(
+          where: { avs_: { address: $avsAddress } }
+          orderBy: blockTimestamp
+          orderDirection: desc
+        ) {
+          id
+          transactionHash
+          logIndex
+          blockNumber
+          blockTimestamp
+          contractAddress
+          avs { id }
+          submitter
+          submissionNonce
+          rewardsSubmissionHash
+          submissionType
+          strategiesAndMultipliers
+          token
+          amount
+          startTimestamp
+          duration
+          operatorRewards
+          description
+          operatorSetId
+        }
+      }
+    `;
+    const result = await this.querySubgraph(query, {
+      avsAddress: avsAddress.toLowerCase(),
+    });
+    return result.rewardsSubmissions || [];
+  }
+
+  /**
+   * Get operator allocation events for portfolio risk calculation
+   */
+  async getOperatorAllocationEvents(operatorAddress: string): Promise<any[]> {
+    const query = `
+      query GetOperatorAllocationEvents($operatorAddress: Bytes!) {
+        allocationEvents(
+          where: { operator_: { address: $operatorAddress } }
+          orderBy: blockTimestamp
+          orderDirection: asc
+        ) {
+          id
+          transactionHash
+          blockTimestamp
+          operator { id }
+          operatorSet { 
+            id 
+            avs { id }
+          }
+          strategy { id }
+          magnitude
+          effectBlock
+        }
+      }
+    `;
+    const result = await this.querySubgraph(query, {
+      operatorAddress: operatorAddress.toLowerCase(),
+    });
+    return result.allocationEvents || [];
+  }
+
+  /**
+   * Get all AVS addresses in the system for ecosystem analysis
+   */
+  async getAllAVSAddresses(limit: number = 100): Promise<string[]> {
+    const query = `
+      query GetAllAVS($limit: Int!) {
+        avss(
+          first: $limit
+          orderBy: createdAt
+          orderDirection: desc
+        ) {
+          id
+          address
+        }
+      }
+    `;
+    const result = await this.querySubgraph(query, { limit });
+    const avsList = result.avss || [];
+    return avsList.map((avs: any) => avs.address);
   }
 }

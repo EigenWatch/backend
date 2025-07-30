@@ -45,7 +45,7 @@ export interface OperatorCommissionEvent {
 export interface OperatorSetMembership {
   id: string;
   operator: { id: string };
-  operatorSet: { id: string; avs: { id: string } };
+  operatorSet: { id: string; avs: { id: string }; createdAt: string };
   joinedAt: string;
   leftAt?: string;
   isActive: boolean;
@@ -57,4 +57,18 @@ export interface DelegationStabilityData {
   volatilityCoefficient: number;
   growthRate: number;
   monthlyChanges: number[];
+}
+
+export interface RewardsSubmission {
+  id: string;
+  avs?: { id: string };
+  submitter: string;
+  submissionNonce: string;
+  submissionType: string;
+  token: string;
+  amount: string;
+  startTimestamp: string;
+  duration: string;
+  operatorRewards?: string;
+  description?: string;
 }
