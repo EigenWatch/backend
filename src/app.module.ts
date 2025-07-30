@@ -7,6 +7,8 @@ import { HttpModule } from '@nestjs/axios';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-store';
 import { RedisCacheService } from './common/redis-cache.service';
+import { RiskAssessmentController } from './risk/risk-assessment.controller';
+import { RiskAssessmentModule } from './risk/risk-assessment.module';
 
 @Module({
   imports: [
@@ -23,8 +25,9 @@ import { RedisCacheService } from './common/redis-cache.service';
       }),
       inject: [ConfigService],
     }),
+    RiskAssessmentModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, RiskAssessmentController],
   providers: [AppService, LoggerService, RedisCacheService],
   exports: [RedisCacheService],
 })

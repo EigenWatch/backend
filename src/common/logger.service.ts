@@ -1,6 +1,5 @@
 import { Injectable, LoggerService as NestLoggerService } from '@nestjs/common';
 import * as winston from 'winston';
-import DailyRotateFile from 'winston-daily-rotate-file';
 
 @Injectable()
 export class LoggerService implements NestLoggerService {
@@ -18,12 +17,6 @@ export class LoggerService implements NestLoggerService {
       transports: [
         // Console output for development
         new winston.transports.Console(),
-        // Daily rotating file logs for debugging
-        new DailyRotateFile({
-          filename: 'logs/eigenwatch-%DATE%.log',
-          datePattern: 'YYYY-MM-DD',
-          maxFiles: '7d', // Keep logs for 7 days
-        }),
       ],
     });
   }
