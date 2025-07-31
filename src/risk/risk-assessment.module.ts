@@ -18,6 +18,7 @@ import { OperatorOnChainPerformanceService } from './services/operator/onchain-p
 import { AVSRiskService } from './services/avs-risk.service';
 import { CorrelationService } from './services/correlation.service';
 import { OperatorRiskService } from './services/operator-risk.service';
+import { RedisCacheService } from 'src/common/redis-cache.service';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { OperatorRiskService } from './services/operator-risk.service';
     DataService,
     MathUtilsService,
     CorrelationService,
+    RedisCacheService,
 
     // Operator risk services
     OperatorOnChainPerformanceService,

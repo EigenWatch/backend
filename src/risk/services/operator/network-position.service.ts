@@ -50,7 +50,7 @@ export class OperatorNetworkPositionService {
   ): Promise<RiskResult> {
     const [operatorData, allOperators] = await Promise.all([
       this.dataService.calculateDelegationTotals(operatorAddress),
-      this.dataService.getAllOperators(1000), // Get top 1000 operators
+      this.dataService.getAllOperators(100), // Get top 100 operators
     ]);
 
     // Get delegation totals for all operators (simplified - in reality would need to calculate)
