@@ -172,44 +172,6 @@ export class DataService {
 
     return true;
   }
-
-  /**
-   * Record request failure for circuit breaker
-   */
-  private recordFailure(): void {
-    this.failureCount++;
-    this.lastFailureTime = Date.now();
-
-    if (this.failureCount >= this.FAILURE_THRESHOLD) {
-      this.logger.warn(
-        `Circuit breaker opened - too many failures (${this.failureCount})`,
-        'DataService',
-      );
-    }
-  }
-
-  /**
-   * Record request success for circuit breaker
-   */
-  private recordSuccess(): void {
-    if (this.failureCount > 0) {
-      this.failureCount = 0;
-      this.logger.log(
-        'Circuit breaker closed - requests successful',
-        'DataService',
-      );
-    }
-  }
-
-  /**
-   * Queue processor - runs continuously
-   */
-  private startQueueProcessor(): void {
-    setInterval(() => {
-      this.processQueue();
-    }, this.QUEUE_PROCESSING_INTERVAL);
-  }
-
   /**
    * Process queued requests respecting concurrency limits
    */
@@ -246,54 +208,245 @@ export class DataService {
       for (const request of requestsToProcess) {
         this.activeRequests.add(request.id);
 
+        // Check if already processed
         if (this.processedRequests.has(request.id)) {
           this.logger.log(
             `Request already processed: ${request.id.substring(0, 50)}...`,
             'DataService',
           );
+
+          // Clean up and continue
+          this.activeRequests.delete(request.id);
           continue;
         }
 
-        // Execute request with timeout
-        // TODO: Set this up to throw errors gracefully instead of crashing the system, for now make it really long
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(
-            () => reject(new Error('Request timeout')),
-            this.REQUEST_TIMEOUT * 1000,
-          );
-        });
+        // Process request with comprehensive error handling
+        this.processRequestSafely(request);
+      }
+    } catch (error) {
+      // Catch any synchronous errors in queue processing
+      this.logger.error(
+        `Error in queue processing: ${error.message}`,
+        error.stack,
+        'DataService',
+      );
+    } finally {
+      this.isProcessingQueue = false;
+    }
+  }
 
-        Promise.race([request.execute(), timeoutPromise])
-          .then((result) => {
+  /**
+   * Process a single request with comprehensive error handling
+   */
+  private processRequestSafely(request: {
+    id: string;
+    execute: () => Promise<any>;
+    resolve: (value: any) => void;
+    reject: (error: any) => void;
+    priority: number;
+    timestamp: number;
+  }): void {
+    try {
+      // Create timeout promise
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(
+          () => reject(new Error('Request timeout')),
+          this.REQUEST_TIMEOUT,
+        );
+      });
+
+      // Execute request with timeout
+      const executePromise = request.execute();
+
+      // Race between execution and timeout
+      Promise.race([executePromise, timeoutPromise])
+        .then((result) => {
+          try {
             this.recordSuccess();
             this.processedRequests.set(request.id, {
               result,
               timestamp: Date.now(),
             });
             request.resolve(result);
-          })
-          .catch((error) => {
+          } catch (resolveError) {
+            // Handle errors in success handling
+            this.logger.error(
+              `Error in request success handling: ${resolveError.message}`,
+              resolveError.stack,
+              'DataService',
+            );
+            // Still try to resolve with the result even if other operations failed
+            try {
+              request.resolve(result);
+            } catch (finalResolveError) {
+              this.logger.error(
+                `Fatal error in request resolution: ${finalResolveError.message}`,
+                finalResolveError.stack,
+                'DataService',
+              );
+            }
+          }
+        })
+        .catch((error) => {
+          try {
             this.recordFailure();
             this.logger.error(
               `Queued request failed: ${request.id.substring(0, 100)}...`,
               error.stack || error.message,
               'DataService',
             );
+
+            // Store error in processed requests
             this.processedRequests.set(request.id, {
               result: error,
               timestamp: Date.now(),
             });
+
             request.reject(error);
-          })
-          .finally(() => {
+          } catch (rejectError) {
+            // Handle errors in error handling
+            this.logger.error(
+              `Error in request error handling: ${rejectError.message}`,
+              rejectError.stack,
+              'DataService',
+            );
+            // Still try to reject with the original error
+            try {
+              request.reject(error);
+            } catch (finalRejectError) {
+              this.logger.error(
+                `Fatal error in request rejection: ${finalRejectError.message}`,
+                finalRejectError.stack,
+                'DataService',
+              );
+            }
+          }
+        })
+        .finally(() => {
+          try {
             this.activeRequests.delete(request.id);
-          });
+          } catch (cleanupError) {
+            // Handle errors in cleanup
+            this.logger.error(
+              `Error in request cleanup: ${cleanupError.message}`,
+              cleanupError.stack,
+              'DataService',
+            );
+            // Force cleanup even if it fails
+            try {
+              this.activeRequests.delete(request.id);
+            } catch (finalCleanupError) {
+              this.logger.error(
+                `Fatal error in request cleanup: ${finalCleanupError.message}`,
+                finalCleanupError.stack,
+                'DataService',
+              );
+            }
+          }
+        });
+    } catch (synchronousError) {
+      // Handle any synchronous errors in request processing setup
+      this.logger.error(
+        `Synchronous error in request processing: ${synchronousError.message}`,
+        synchronousError.stack,
+        'DataService',
+      );
+
+      try {
+        this.recordFailure();
+        this.processedRequests.set(request.id, {
+          result: synchronousError,
+          timestamp: Date.now(),
+        });
+        request.reject(synchronousError);
+      } catch (syncErrorHandlingError) {
+        this.logger.error(
+          `Error handling synchronous error: ${syncErrorHandlingError.message}`,
+          syncErrorHandlingError.stack,
+          'DataService',
+        );
+      } finally {
+        try {
+          this.activeRequests.delete(request.id);
+        } catch (syncCleanupError) {
+          this.logger.error(
+            `Error in synchronous cleanup: ${syncCleanupError.message}`,
+            syncCleanupError.stack,
+            'DataService',
+          );
+        }
       }
-    } finally {
-      this.isProcessingQueue = false;
     }
   }
 
+  /**
+   * Queue processor - runs continuously with error handling
+   */
+  private startQueueProcessor(): void {
+    setInterval(() => {
+      try {
+        this.processQueue().catch((error) => {
+          // Catch any unhandled promise rejections from processQueue
+          this.logger.error(
+            `Unhandled error in queue processing: ${error.message}`,
+            error.stack,
+            'DataService',
+          );
+        });
+      } catch (error) {
+        // Catch any synchronous errors from calling processQueue
+        this.logger.error(
+          `Error starting queue processing: ${error.message}`,
+          error.stack,
+          'DataService',
+        );
+      }
+    }, this.QUEUE_PROCESSING_INTERVAL);
+  }
+
+  /**
+   * Enhanced error handling for the circuit breaker methods
+   */
+  private recordFailure(): void {
+    try {
+      this.failureCount++;
+      this.lastFailureTime = Date.now();
+
+      if (this.failureCount >= this.FAILURE_THRESHOLD) {
+        this.logger.warn(
+          `Circuit breaker opened - too many failures (${this.failureCount})`,
+          'DataService',
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error recording failure in circuit breaker: ${error.message}`,
+        error.stack,
+        'DataService',
+      );
+    }
+  }
+
+  /**
+   * Enhanced error handling for the circuit breaker methods
+   */
+  private recordSuccess(): void {
+    try {
+      if (this.failureCount > 0) {
+        this.failureCount = 0;
+        this.logger.log(
+          'Circuit breaker closed - requests successful',
+          'DataService',
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error recording success in circuit breaker: ${error.message}`,
+        error.stack,
+        'DataService',
+      );
+    }
+  }
   /**
    * Queue a request for execution with deduplication
    */
