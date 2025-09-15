@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model alembic_version {
+  version_num String @id(map: "alembic_version_pkc") @db.VarChar(32)
+}
+
+model concentration_metrics {
+  id                       Int      @id @default(autoincrement())
+  entity_type              String   @db.VarChar(20)
+  entity_id                String   @db.VarChar(50)
+  date                     DateTime @db.Date
+  concentration_type       String   @db.VarChar(20)
+  hhi_value                Decimal? @db.Decimal(6, 4)
+  gini_coefficient         Decimal? @db.Decimal(6, 4)
+  coefficient_of_variation Decimal? @db.Decimal
+  top_1_percentage         Decimal? @db.Decimal(5, 2)
+  top_5_percentage         Decimal? @db.Decimal(5, 2)
+  top_10_percentage        Decimal? @db.Decimal(5, 2)
+  total_entities           Int?
+  effective_entities       Decimal? @db.Decimal(8, 2)
+  total_amount             Decimal? @db.Decimal
+  operator_id              String?  @db.VarChar(50)
+
+  @@unique([entity_type, entity_id, date, concentration_type], map: "uix_concentration_metrics")
+}
+
+model operator_analytics {
+  id                              Int       @id @default(autoincrement())
+  operator_id                     String    @db.VarChar(50)
+  date                            DateTime  @db.Date
+  risk_score                      Decimal   @db.Decimal(5, 2)
+  confidence_score                Decimal   @db.Decimal(5, 2)
+  risk_level                      String    @db.VarChar(10)
+  performance_score               Decimal?  @db.Decimal(5, 2)
+  economic_score                  Decimal?  @db.Decimal(5, 2)
+  network_position_score          Decimal?  @db.Decimal(5, 2)
+  delegation_hhi                  Decimal?  @db.Decimal(6, 4)
+  delegation_volatility_7d        Decimal?  @db.Decimal(8, 4)
+  delegation_volatility_30d       Decimal?  @db.Decimal(8, 4)
+  delegation_volatility_90d       Decimal?  @db.Decimal(8, 4)
+  growth_rate_30d                 Decimal?  @db.Decimal(8, 4)
+  growth_consistency_score        Decimal?  @db.Decimal(5, 2)
+  size_percentile                 Decimal?  @db.Decimal(5, 2)
+  delegator_distribution_cv       Decimal?  @db.Decimal(8, 4)
+  snapshot_total_delegated_shares Decimal?  @db.Decimal
+  snapshot_delegator_count        Int?
+  snapshot_avs_count              Int?
+  snapshot_commission_bips        Decimal?  @db.Decimal(8, 2)
+  slashing_event_count            Int?
+  lifetime_slashing_amount        Decimal?  @db.Decimal(20, 6)
+  operational_days                Int?
+  is_active                       Boolean?
+  has_sufficient_data             Boolean?
+  calculated_at                   DateTime? @db.Timestamp(6)
+  calculation_duration_ms         Int?
+
+  @@index([date, is_active], map: "idx_operator_analytics_date_active")
+  @@index([date, risk_score], map: "idx_operator_analytics_date_risk")
+}
+
+model volatility_metrics {
+  id                       Int      @id @default(autoincrement())
+  entity_type              String   @db.VarChar(20)
+  entity_id                String   @db.VarChar(50)
+  date                     DateTime @db.Date
+  metric_type              String   @db.VarChar(20)
+  volatility_7d            Decimal? @db.Decimal(8, 4)
+  volatility_30d           Decimal? @db.Decimal(8, 4)
+  volatility_90d           Decimal? @db.Decimal(8, 4)
+  mean_value               Decimal? @db.Decimal(20, 6)
+  coefficient_of_variation Decimal? @db.Decimal(8, 4)
+  trend_direction          Decimal? @db.Decimal(8, 4)
+  trend_strength           Decimal? @db.Decimal(6, 4)
+  data_points_count        Int?
+  confidence_score         Decimal? @db.Decimal(5, 2)
+
+  @@unique([entity_type, entity_id, date, metric_type], map: "uix_volatility_metrics")
+}
